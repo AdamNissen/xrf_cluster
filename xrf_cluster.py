@@ -6,13 +6,14 @@ TO DO LIST:
     
     5. Make docstrings!
     6. Build a method to score the clustering based on existing results.
-    8. Figure out how to set a colour pallate for the images
     9. Update everything for actual data.
     10. Maybe change how we deal with images so it is easy to save and export them after the fact,
     that said, generating the images takes so little time, so perhaps we don't need to carry
     them in memory.
     11. Revise save stats to not rely on numpy
     12. Figure out how to build a file with a neat folderset
+    13. Define a method for picking colours for individual clusters as opposed to just setting default colur maps
+    14. Create a cluster dictionary containing "name" and "colour" (maybe more) to be set by users later
     
 DONE LIST
     1. update plot_clusters so that binary plots of cluster vs all can be made
@@ -22,6 +23,7 @@ DONE LIST
     3. Clean up the image output (e.g. no ticks, no tick labels, no apron, etc)
     4. Create the methods get_stats() and save_stats()
     7. Create save_maps() method or methods #actually just added save argument to the plotting image methods
+    8. Figure out how to set a colour pallate for the images
 """
 import PIL
 import numpy as np
@@ -51,10 +53,27 @@ class XRF_cluster():
     
     
     def set_folderpath(self, folderpath):
+        """
+        Sets or resets the path to the folder containing XRF data
+
+        Parameters
+        ----------
+        folderpath : str, directory
+            The complete or relative path to the directory containing XRF data.
+        """
         #This method is only really necessary if the folderpath becomes a private or protected variable
         self.folderpath = folderpath
 
     def set_suffix(self, suffix):
+        """
+        Sets the file suffix for files containing XRF data (e.g., .txt, .jpg, .csv,
+        etc.). self._suffix may be depreciated, and if so this method will be unnecessary
+
+        Parameters
+        ----------
+        suffix : str
+            The file suffix of files containing XRF data, likely ".txt", perhaps ".bpm".
+        """
         self._suffix = suffix
 
     def _identify_files(self):
@@ -169,7 +188,7 @@ class XRF_cluster():
         #Saving to a class attribute
         self._clusters = kmn_pred
         
-    def _display(self, phase_list = None, save = False, filepath = None):
+    def _display(self, phase_list = None, save = False, filepath = None, cmap = 'viridis'):
         #Displays the array, we could add the option to select colours here as well
         displayed_element = None
         if phase_list is None:
@@ -195,13 +214,13 @@ class XRF_cluster():
         fig.patch.set_visible(False) #removing the white apron
         
         if save == True:
-            plt.imshow(phase_list)
+            plt.imshow(phase_list, cmap=cmap)
             plt.savefig(fname = filepath, dpi = 600)
         if save == False:
-            plt.imshow(phase_list)
+            plt.imshow(phase_list, cmap=cmap)
         
     
-    def plot_clusters(self, cluster = None, save = False):
+    def plot_clusters(self, cluster = None, save = False, cmap = 'viridis'):
         #A method that shows an image of the classified clusters
         #must be updated to show more than one cluster if requested
         #clusters = []
@@ -209,9 +228,9 @@ class XRF_cluster():
         if cluster == None:
             #Plotting the full phasemap together by calling the default of display
             if save == True:
-                    self._display(save = True)
+                    self._display(save = True, cmap=cmap)
             elif save == False:
-                    self._display()
+                    self._display(cmap=cmap)
             return
         
         elif cluster == 'All' or cluster == 'all' or cluster == 'ALL':
@@ -406,6 +425,6 @@ if __name__ == "__main__":
                      outpath="Example data/test_output/NW13-33/")
     module_test.fit()
     module_test.cluster(clusters = 6)
-    module_test.plot_clusters(cluster = None, save = True)
+    module_test.plot_clusters(cluster = None, save = True, cmap='magma')
     module_test.get_stats()
     module_test.save_stats()
