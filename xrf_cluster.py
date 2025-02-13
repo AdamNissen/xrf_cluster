@@ -77,6 +77,19 @@ class XRF_cluster():
         self._suffix = suffix
 
     def _identify_files(self):
+        """
+        A hidden method used to produce a list of all files with either a .bmp, 
+        or a .TXT file suffix. It also produces a list of "channels" or elements
+        that are represented in the data files
+
+        Returns
+        -------
+        output : list
+            A list of files that contain XRF data in the input folder
+        self._channels : list
+            A list of elements represented in the output list of XRF data files
+            in the folder
+        """
         #Collecting all .bmp files found at folderpath
         
         #A suite of error messages to make sure the folderpath is correct
