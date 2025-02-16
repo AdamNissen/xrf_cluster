@@ -6,14 +6,13 @@ TO DO LIST:
     
     5. Make docstrings!
     6. Build a method to score the clustering based on existing results.
-    9. Update everything for actual data.
     10. Maybe change how we deal with images so it is easy to save and export them after the fact,
     that said, generating the images takes so little time, so perhaps we don't need to carry
     them in memory.
     11. Revise save stats to not rely on numpy
     12. Figure out how to build a file with a neat folderset
     13. Define a method for picking colours for individual clusters as opposed to just setting default colur maps
-    14. Create a cluster dictionary containing "name" and "colour" (maybe more) to be set by users later
+
     
 DONE LIST
     1. update plot_clusters so that binary plots of cluster vs all can be made
@@ -24,6 +23,9 @@ DONE LIST
     4. Create the methods get_stats() and save_stats()
     7. Create save_maps() method or methods #actually just added save argument to the plotting image methods
     8. Figure out how to set a colour pallate for the images
+    9. Update everything for actual data.
+    14. Create a cluster dictionary containing "name" and "colour" (maybe more) to be set by users later
+    15. Define a method for setting different colormaps
 """
 import PIL
 import numpy as np
@@ -32,6 +34,8 @@ import glob
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap
+import matplotlib as mpl
 
 
 #this is for later, let me figure out how to do things first
@@ -46,6 +50,7 @@ class XRF_cluster():
         self._channels = None #the features used in clustering
         self._n_cluster = None
         self._target_values = None
+        self.cluster_info = None #Information about each cluster, 0 = alias (e.g. mineral type) 1 = colour code
         
         self.outpath = outpath
         if self.outpath is None:
@@ -182,6 +187,120 @@ class XRF_cluster():
     def _unflatten_sheet(self):
         pass
     
+    def _generate_cluster_info(self):
+        """
+        Hidden method used to reset the cluster information dictionary in the 
+        class attributes. It first, resets the attrubute self.cluster_info to a 
+        blank dictionary. Then it fills that dictionary with two-value lists, keyed
+        0 - n where n is the number of clusters prescribed during self.cluster().
+        Note that this method fills the lists with default values "mineral" and 
+        "colour".
+        
+        The intended use for the cluster_info dict is to contain two bits of 
+        information about each cluster. 1) the proposed mineral type of the cluster
+        and 2) the colour used to identify that cluster in the map (likely as a
+        hex code) for example:
+                                                                    
+        self.cluster_info = {0: ['tourmaline', '#5F9EA0'],
+                             1: ['muscovite', '#FF00FF'],
+                             2: ['spodumene', '#FFDAB9']}
+        
+        DEVELOPMENT NOTE
+        ----------------
+        If more values are needed in each self.cluster_info dictionary entry, e.g.
+        if we have to add some geochemical value, or anything like that, please
+        add a default entry here. That will be easiest.
+        """
+        self.cluster_info = {}
+        for i in list(range(self._n_cluster)):
+            self.cluster_info[i] = ['mineral', 'colour']
+    
+    def set_colourmap(self, cmap):
+        """
+        Sets the output colourmap to one of the default matplotlib colourmaps.
+        Note, this changes the colour for every cluster sequentially, i.e., the
+        "lowest value" or "first" colour in the map will be assigned to cluster 
+        "0", then the second value goes to cluster "1", etc. 
+
+        NOTE ON SPELLING
+        Whenever an established code name is used, I will use that term, e.g.,
+        matplotlib colormap. At all other times I will use the Canadian spelling
+        of "colour".        
+
+        Parameters
+        ----------
+        cmap : str, matplotlib colormap
+            The colourmap to be used. In general, this class will default to 
+            "inferno". See options at https://matplotlib.org/stable/users/explain/colors/colormaps.html#colormaps
+
+        Raises
+        ------
+        ValueError
+            If the cmap value is not a valid colormap.
+        """
+        #Filtering out non-matplotlib colormaps
+        if cmap not in ['Accent', 'Accent_r', 'Blues', 'Blues_r', 'BrBG', 'BrBG_r', 'BuGn', 'BuGn_r', 'BuPu', 'BuPu_r', 'CMRmap', 'CMRmap_r', 'Dark2', 'Dark2_r', 'GnBu', 'GnBu_r', 'Greens', 'Greens_r', 'Greys', 'Greys_r', 'OrRd', 'OrRd_r', 'Oranges', 'Oranges_r', 'PRGn', 'PRGn_r', 'Paired', 'Paired_r', 'Pastel1', 'Pastel1_r', 'Pastel2', 'Pastel2_r', 'PiYG', 'PiYG_r', 'PuBu', 'PuBuGn', 'PuBuGn_r', 'PuBu_r', 'PuOr', 'PuOr_r', 'PuRd', 'PuRd_r', 'Purples', 'Purples_r', 'RdBu', 'RdBu_r', 'RdGy', 'RdGy_r', 'RdPu', 'RdPu_r', 'RdYlBu', 'RdYlBu_r', 'RdYlGn', 'RdYlGn_r', 'Reds', 'Reds_r', 'Set1', 'Set1_r', 'Set2', 'Set2_r', 'Set3', 'Set3_r', 'Spectral', 'Spectral_r', 'Wistia', 'Wistia_r', 'YlGn', 'YlGnBu', 'YlGnBu_r', 'YlGn_r', 'YlOrBr', 'YlOrBr_r', 'YlOrRd', 'YlOrRd_r', 'afmhot', 'afmhot_r', 'autumn', 'autumn_r', 'binary', 'binary_r', 'bone', 'bone_r', 'brg', 'brg_r', 'bwr', 'bwr_r', 'cividis', 'cividis_r', 'cool', 'cool_r', 'coolwarm', 'coolwarm_r', 'copper', 'copper_r', 'cubehelix', 'cubehelix_r', 'flag', 'flag_r', 'gist_earth', 'gist_earth_r', 'gist_gray', 'gist_gray_r', 'gist_heat', 'gist_heat_r', 'gist_ncar', 'gist_ncar_r', 'gist_rainbow', 'gist_rainbow_r', 'gist_stern', 'gist_stern_r', 'gist_yarg', 'gist_yarg_r', 'gnuplot', 'gnuplot2', 'gnuplot2_r', 'gnuplot_r', 'gray', 'gray_r', 'hot', 'hot_r', 'hsv', 'hsv_r', 'inferno', 'inferno_r', 'jet', 'jet_r', 'magma', 'magma_r', 'nipy_spectral', 'nipy_spectral_r', 'ocean', 'ocean_r', 'pink', 'pink_r', 'plasma', 'plasma_r', 'prism', 'prism_r', 'rainbow', 'rainbow_r', 'seismic', 'seismic_r', 'spring', 'spring_r', 'summer', 'summer_r', 'tab10', 'tab10_r', 'tab20', 'tab20_r', 'tab20b', 'tab20b_r', 'tab20c', 'tab20c_r', 'terrain', 'terrain_r', 'turbo', 'turbo_r', 'twilight', 'twilight_r', 'twilight_shifted', 'twilight_shifted_r', 'viridis', 'viridis_r', 'winter', 'winter_r']:
+            raise ValueError(str(cmap)+" is not a valid value for cmap; supported values are 'Accent', 'Accent_r', 'Blues', 'Blues_r', 'BrBG', 'BrBG_r', 'BuGn', 'BuGn_r', 'BuPu', 'BuPu_r', 'CMRmap', 'CMRmap_r', 'Dark2', 'Dark2_r', 'GnBu', 'GnBu_r', 'Greens', 'Greens_r', 'Greys', 'Greys_r', 'OrRd', 'OrRd_r', 'Oranges', 'Oranges_r', 'PRGn', 'PRGn_r', 'Paired', 'Paired_r', 'Pastel1', 'Pastel1_r', 'Pastel2', 'Pastel2_r', 'PiYG', 'PiYG_r', 'PuBu', 'PuBuGn', 'PuBuGn_r', 'PuBu_r', 'PuOr', 'PuOr_r', 'PuRd', 'PuRd_r', 'Purples', 'Purples_r', 'RdBu', 'RdBu_r', 'RdGy', 'RdGy_r', 'RdPu', 'RdPu_r', 'RdYlBu', 'RdYlBu_r', 'RdYlGn', 'RdYlGn_r', 'Reds', 'Reds_r', 'Set1', 'Set1_r', 'Set2', 'Set2_r', 'Set3', 'Set3_r', 'Spectral', 'Spectral_r', 'Wistia', 'Wistia_r', 'YlGn', 'YlGnBu', 'YlGnBu_r', 'YlGn_r', 'YlOrBr', 'YlOrBr_r', 'YlOrRd', 'YlOrRd_r', 'afmhot', 'afmhot_r', 'autumn', 'autumn_r', 'binary', 'binary_r', 'bone', 'bone_r', 'brg', 'brg_r', 'bwr', 'bwr_r', 'cividis', 'cividis_r', 'cool', 'cool_r', 'coolwarm', 'coolwarm_r', 'copper', 'copper_r', 'cubehelix', 'cubehelix_r', 'flag', 'flag_r', 'gist_earth', 'gist_earth_r', 'gist_gray', 'gist_gray_r', 'gist_heat', 'gist_heat_r', 'gist_ncar', 'gist_ncar_r', 'gist_rainbow', 'gist_rainbow_r', 'gist_stern', 'gist_stern_r', 'gist_yarg', 'gist_yarg_r', 'gnuplot', 'gnuplot2', 'gnuplot2_r', 'gnuplot_r', 'gray', 'gray_r', 'hot', 'hot_r', 'hsv', 'hsv_r', 'inferno', 'inferno_r', 'jet', 'jet_r', 'magma', 'magma_r', 'nipy_spectral', 'nipy_spectral_r', 'ocean', 'ocean_r', 'pink', 'pink_r', 'plasma', 'plasma_r', 'prism', 'prism_r', 'rainbow', 'rainbow_r', 'seismic', 'seismic_r', 'spring', 'spring_r', 'summer', 'summer_r', 'tab10', 'tab10_r', 'tab20', 'tab20_r', 'tab20b', 'tab20b_r', 'tab20c', 'tab20c_r', 'terrain', 'terrain_r', 'turbo', 'turbo_r', 'twilight', 'twilight_r', 'twilight_shifted', 'twilight_shifted_r', 'viridis', 'viridis_r', 'winter', 'winter_r'")
+        
+        #Extracting values from the cmap
+        colours = mpl.colormaps[cmap].resampled(self._n_cluster)
+        for n in list(range(self._n_cluster)):
+            colour = colours.colors[n]
+            self.cluster_info[n][1] = colour
+    
+    def set_colour(self, cluster, colour):
+        """
+        Defines a colour to use for a single phase during plotting.
+
+        Parameters
+        ----------
+        cluster : int
+            Number of the cluster to apply the colour to. Note that clusters are
+            numbered from 0-n where n is one less than the total number of 
+            clusters. Value must be present in self.cluster_info.keys().
+        colour : str, array, any kind of colour notation
+            Some colour notation that matplotlib will accept. Can be lots of things,
+            try the hex code if you are having trouble.
+
+        Raises
+        ------
+        ValueError
+            Will be raised if the cluster argument is not a part of
+            self.cluster_info.keys().
+        """
+        if cluster in self.cluster_info.keys():
+            self.cluster_info[cluster][1] = colour
+        else: 
+            raise ValueError(str(cluster)+" is not a valid cluster. Please use a key from self.cluster_info")
+            
+    def set_phase(self, cluster, phase):
+        """
+        Defines an alias to be used when refering to a cluster. This will often
+        be the mineral or phase that the cluster represents, e.g., "muscovite",
+        or "glass". This can be more descriptive, if appropriate, e.g., "garnet 
+        rims", "garnet cores", or "strange inclusions in the garnet".
+        
+        Parameters
+        ----------
+        cluster : int
+            Number of the cluster to apply the colour to. Note that clusters are
+            numbered from 0-n where n is one less than the total number of 
+            clusters. Value must be present in self.cluster_info.keys().
+        colour : str, array, any kind of colour notation
+            Some colour notation that matplotlib will accept. Can be lots of things,
+            try the hex code if you are having trouble.
+
+        Raises
+        ------
+        ValueError
+            Will be raised if the cluster argument is not a part of
+            self.cluster_info.keys().
+        """
+        if cluster in self.cluster_info.keys():
+            self.cluster_info[cluster][0] = phase
+        else: 
+            raise ValueError(str(cluster)+" is not a valid cluster. Please use a key from self.cluster_info")
+        
     def cluster(self, clusters):
         #Pre-start saving the cluster number
         if not isinstance(clusters, int):
@@ -201,7 +320,11 @@ class XRF_cluster():
         #Saving to a class attribute
         self._clusters = kmn_pred
         
-    def _display(self, phase_list = None, save = False, filepath = None, cmap = 'viridis'):
+        #generating cluster information, and building a default colormap
+        self._generate_cluster_info()
+        self.set_colourmap('inferno')
+        
+    def _display(self, phase_list = None, save = False, filepath = None):
         #Displays the array, we could add the option to select colours here as well
         displayed_element = None
         if phase_list is None:
@@ -221,29 +344,41 @@ class XRF_cluster():
         if filepath is None and save == True:
             filepath = self.outpath+displayed_element+"_map.jpg"
         
+        #Extracting the colourmap from self.cluster_info
+        c_map = []
+        for i in self.cluster_info.keys():
+            c_map += [self.cluster_info[i][1]]
+        c_map = ListedColormap(c_map)
+        
         #plotting the array as a false coloured map
         fig = plt.figure()
         plt.axis('off') #removing axis ticks and tick labels
         fig.patch.set_visible(False) #removing the white apron
         
         if save == True:
-            plt.imshow(phase_list, cmap=cmap)
+            plt.imshow(phase_list, cmap=c_map)
             plt.savefig(fname = filepath, dpi = 600)
         if save == False:
-            plt.imshow(phase_list, cmap=cmap)
+            plt.imshow(phase_list, cmap=c_map)
         
     
-    def plot_clusters(self, cluster = None, save = False, cmap = 'viridis'):
+    def plot_clusters(self, cluster = None, save = False):
         #A method that shows an image of the classified clusters
         #must be updated to show more than one cluster if requested
         #clusters = []
         
+        #Extracting the colourmap from self.cluster_info
+        c_map = []
+        for i in self.cluster_info.keys():
+            c_map += [self.cluster_info[i][1]]
+        c_map = ListedColormap(c_map)
+
         if cluster == None:
             #Plotting the full phasemap together by calling the default of display
             if save == True:
-                    self._display(save = True, cmap=cmap)
+                    self._display(save = True)
             elif save == False:
-                    self._display(cmap=cmap)
+                    self._display()
             return
         
         elif cluster == 'All' or cluster == 'all' or cluster == 'ALL':
@@ -392,26 +527,7 @@ class XRF_cluster():
         #Kind of redundant with save arguments added to earlier methods
         pass
     
-    # def import_targets(self, targetpath):
-    #Stopped development because I don't have target information to verify with.
-        
-    #     if targetpath[-4:] == '.bmp':
-    #         new_map = PIL.Image.open(targetpath) #add some error flags here to ensure an image is being imported
-    #         temp_array = np.array(new_map) 
-    #     elif targetpath[-4:] == '.TXT' or targetpath[-4:] == '.txt':
-    #         temp_array = np.loadtxt(targetpath, delimiter = ',')
-    #     else:
-    #         raise KeyError('imported data must be in either .bmp or .TXT format')
-    #         return
-        
-    #     row = temp_array.flatten()
-        
-    #     self._target_values = row
 
-    
-    # def score(self, other):
-    #     pass
-    
 #It works. Try it.
 def test(shape = 1):
     ### IMPORTANT, must reset this to match the new self.fit() method ###
@@ -438,6 +554,6 @@ if __name__ == "__main__":
                      outpath="Example data/test_output/NW13-33/")
     module_test.fit()
     module_test.cluster(clusters = 6)
-    module_test.plot_clusters(cluster = None, save = True, cmap='magma')
-    module_test.get_stats()
-    module_test.save_stats()
+    module_test.plot_clusters(cluster = None, save = False)
+    #module_test.get_stats()
+    #module_test.save_stats()
