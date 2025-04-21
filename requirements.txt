@@ -1,0 +1,9 @@
+# Core libraries for data handling, processing, and plotting
+numpy
+pandas
+scikit-learn
+matplotlib
+Pillow
+
+# Optional: For building the executable (not needed just to run from source)
+# pyinstaller
