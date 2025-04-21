@@ -6,11 +6,7 @@ __pycache__/
 # Virtual Environment Directories (common names)
 venv/
 .venv/
-env/
-.env/
-ENV/
-env.bak/
-venv.bak/
+
 
 # Distribution / Packaging
 build/
@@ -43,4 +39,4 @@ htmlcov/
 
 # Secrets / Config (if any are added later)
 # *.ini
-# *.env
+# *.e

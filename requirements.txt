@@ -4,6 +4,7 @@ pandas
 scikit-learn
 matplotlib
 Pillow
+colorcet
 
 # Optional: For building the executable (not needed just to run from source)
 # pyinstaller
