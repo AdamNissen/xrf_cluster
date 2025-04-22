@@ -1,4 +1,4 @@
-# core/data_io.py
+# src/xrf_cluster_core/data_io.py
 
 import os
 import glob
@@ -6,21 +6,17 @@ import numpy as np
 from PIL import Image # Using Pillow for image loading
 import pandas as pd
 import matplotlib.pyplot as plt
-import colorcet as cc 
-from matplotlib.colors import ListedColormap, BoundaryNorm
-
-# Set a non-interactive backend for Matplotlib if running without a display (optional)
-# import matplotlib
-# matplotlib.use('Agg')
+# Removed colorcet and specific matplotlib.colors imports for simplification
 
 # --- Configuration ---
 SUPPORTED_EXTENSIONS_LOWER = ['.bmp', '.txt']
 
-# ... load_element_maps function remains the same as the last version ...
-# (Make sure the previous version of load_element_maps is here)
+# --- load_element_maps function (Unchanged from last correct version) ---
 def load_element_maps(input_dir: str) -> tuple[np.ndarray, tuple[int, int], list[str]]:
-    """Loads element map data... (docstring from previous version)"""
-    # --- FUNCTION CODE FROM PREVIOUS STEP ---
+    """
+    Loads element map data from .bmp and .txt/.TXT files in a specified directory.
+    (Docstring remains the same)
+    """
     if not os.path.isdir(input_dir):
         raise FileNotFoundError(f"Input directory not found: {input_dir}")
 
@@ -37,7 +33,6 @@ def load_element_maps(input_dir: str) -> tuple[np.ndarray, tuple[int, int], list
             if f not in all_files_set:
                 all_files.append(f)
                 all_files_set.add(f)
-
 
     if not all_files:
         raise FileNotFoundError(f"No supported map files ({', '.join(SUPPORTED_EXTENSIONS_LOWER)}) found in {input_dir}")
@@ -78,7 +73,6 @@ def load_element_maps(input_dir: str) -> tuple[np.ndarray, tuple[int, int], list
                 except ValueError as txt_e:
                     print(f"    Error: Failed to load TXT file '{filename}'. Check delimiters/format. Error: {txt_e}")
                     raise IOError(f"Failed loading TXT '{filename}'. Ensure it's comma-delimited.") from txt_e
-
             else:
                 print(f"    Skipping file with unexpected extension: {filename}")
                 continue
@@ -99,15 +93,9 @@ def load_element_maps(input_dir: str) -> tuple[np.ndarray, tuple[int, int], list
             element_data_dict[element_name] = data.flatten()
             element_names_list.append(element_name)
 
-        except FileNotFoundError:
-             print(f"  Error: File disappeared or invalid path: {filename}")
-             raise
-        except IOError as e:
-            print(f"  Error reading or processing file {filename}: {e}")
-            raise
-        except Exception as e:
-            print(f"  An unexpected error occurred processing file {filename}: {e}")
-            raise
+        except FileNotFoundError: raise
+        except IOError as e: raise
+        except Exception as e: raise
 
     if not element_data_dict:
         raise ValueError("Could not load any valid element map data.")
@@ -123,27 +111,19 @@ def load_element_maps(input_dir: str) -> tuple[np.ndarray, tuple[int, int], list
 
     print("Data stacking complete.")
     return pixel_element_data, map_shape, element_names_list
-# --- END OF load_element_maps FUNCTION ---
 
 
+# --- save_results function (Simplified Version) ---
 def save_results(output_dir: str, phase_map_labels: np.ndarray, stats_df: pd.DataFrame, map_shape: tuple[int, int]):
-                                # TODO: Task 1.6 - Add optional edited_names, edited_colors parameters later
-                                # TODO: Make image_format an argument/option later
     """
-    Saves the phase map image (default TIFF) and statistics CSV to the output directory.
-    Uses a discrete Colorcet Glasbey colormap suitable for categorical data,
-    with normalization to handle potentially non-contiguous labels correctly.
+    Saves the phase map image (default TIFF) and statistics CSV.
+    Uses a standard matplotlib colormap (viridis) for simplicity.
 
     Args:
         output_dir: The path to the directory where results will be saved.
         phase_map_labels: 1D NumPy array containing the cluster label for each pixel.
         stats_df: Pandas DataFrame containing the calculated phase statistics.
         map_shape: The original map dimensions (height, width).
-
-    Raises:
-        ValueError: If label array size mismatches map shape, or no unique labels found.
-        OSError: If output directory cannot be created.
-        Exception: Reraises exceptions from plotting or file saving.
     """
     print(f"\nSaving results to: {output_dir}")
     try:
@@ -152,12 +132,12 @@ def save_results(output_dir: str, phase_map_labels: np.ndarray, stats_df: pd.Dat
         print(f"  Error creating output directory '{output_dir}': {e}")
         raise
 
-    # --- Save Phase Map Image ---
+    # --- Save Phase Map Image (Simplified) ---
     output_image_format = 'tiff' # Default format
     output_map_filename = f'phase_map.{output_image_format}' # Base filename
-    # TODO: Task 1.5 - Implement file bumping logic here or wrap this function call
+    # TODO: Task 1.5 - Implement file bumping logic here
     output_map_path = os.path.join(output_dir, output_map_filename)
-    print(f"  Generating phase map image ({output_image_format})...")
+    print(f"  Generating phase map image ({output_image_format}) using 'viridis' cmap...")
 
     try:
         if phase_map_labels.size != map_shape[0] * map_shape[1]:
@@ -170,51 +150,22 @@ def save_results(output_dir: str, phase_map_labels: np.ndarray, stats_df: pd.Dat
 
         if num_unique_phases == 0:
              print("    Warning: No unique phases found in labels. Skipping map generation.")
-             # Skip saving stats too? Or save empty stats file? For now, just skip map.
         else:
-            # --- Create Discrete Colormap and Normalization ---
-            # Select colors from Colorcet Glasbey map
-            #num_colors_to_get = min(num_unique_phases, len(cc.cm.glasbey))
-            if num_unique_phases > len(cc.cm.glasbey):
-                 print(f"Warning: Number of unique phases ({num_unique_phases}) exceeds Glasbey colors ({len(cc.cm.glasbey)}). Colors will repeat.")
-
-            colors = cc.cm.glasbey[:num_colors_to_get] # Get hex colors or RGB tuples
-            cmap = ListedColormap(colors, name='glasbey_subset')
-
-            # Create boundaries for normalization: place boundaries halfway between labels
-            sorted_labels = np.sort(unique_labels)
-            # Define boundaries array: add lower boundary below the first label, upper boundary above the last label,
-            # and boundaries halfway between consecutive labels.
-            boundaries = np.concatenate(([sorted_labels[0] - 0.5],
-                                         sorted_labels[:-1] + np.diff(sorted_labels) / 2.0,
-                                         [sorted_labels[-1] + 0.5]))
-            #norm = BoundaryNorm(boundaries, cmap.N) # cmap.N is the number of colors in the map
-            # --- End Colormap and Normalization ---
+            # --- Use standard Matplotlib colormap ---
+            cmap = plt.get_cmap('viridis') # Using viridis as requested
 
             fig, ax = plt.subplots(figsize=(8, 8 * map_shape[0] / map_shape[1]))
-
-            # Display using the actual label values, normalized correctly by BoundaryNorm
-            #im = ax.imshow(phase_map_reshaped, cmap=cmap, norm=norm, interpolation='none')
+            # Let imshow handle normalization of integer labels for the colormap
             im = ax.imshow(phase_map_reshaped, cmap=cmap, interpolation='none')
             ax.set_title('Mineral Phase Map')
             ax.axis('off')
-            # --- Use standard Matplotlib Colormap (Temporary Test) ---
-            print("    Using fallback 'tab10' colormap for diagnostics.")
-            cmap = plt.get_cmap('tab10', num_unique_phases) # Use tab10 (max 10 colors) or tab20
-            norm = None # Do not use custom normalization
-            # --- End Temporary Test ---
-            # --- Configure Colorbar ---
-            # Use the BoundaryNorm and specify ticks at the original label values
-            cbar = fig.colorbar(im, ax=ax, ticks=sorted_labels, label='Phase ID')
-            print(f"    Colorbar created with ticks: {sorted_labels}") # Debug print
-#            cbar = fig.colorbar(im, ax=ax, norm=norm, boundaries=boundaries, ticks=sorted_labels,
- #                               spacing='uniform', # Uniform spacing looks better with BoundaryNorm
-  #                              label='Phase ID')
-            # Set tick labels explicitly (optional, usually ticks=sorted_labels is enough)
-            # cbar.ax.set_yticklabels([str(int(l)) for l in sorted_labels]) # Ensure labels are strings if needed
 
-            # Optional: Code block for potentially mapping labels to names (remains commented)
-            # try: ... except ...
+            # --- Configure Colorbar (Simplified) ---
+            # Create ticks based on the unique labels found
+            sorted_labels = np.sort(unique_labels)
+            cbar = fig.colorbar(im, ax=ax, ticks=sorted_labels, spacing='proportional', label='Phase ID')
+            # Setting ticks should usually be sufficient for integer data with imshow's default norm
+            print(f"    Colorbar created with ticks: {sorted_labels}")
 
             # Save the figure
             plt.savefig(output_map_path, dpi=300, bbox_inches='tight', format=output_image_format)
@@ -227,13 +178,12 @@ def save_results(output_dir: str, phase_map_labels: np.ndarray, stats_df: pd.Dat
              plt.close(fig)
         raise
 
-    # --- Save Statistics CSV ---
+    # --- Save Statistics CSV (Unchanged) ---
     output_stats_filename = 'phase_statistics.csv' # Base filename
-    # TODO: Task 1.5 - Implement file bumping logic here or wrap this function call
+    # TODO: Task 1.5 - Implement file bumping logic here
     output_stats_path = os.path.join(output_dir, output_stats_filename)
     print(f"  Saving phase statistics...")
     try:
-        # Only save stats if the DataFrame is not empty (might be empty if map saving was skipped)
         if not stats_df.empty:
              stats_df.to_csv(output_stats_path, index=False, float_format='%.4f')
              print(f"  Statistics saved to: {output_stats_path}")
@@ -244,7 +194,8 @@ def save_results(output_dir: str, phase_map_labels: np.ndarray, stats_df: pd.Dat
          raise
 
 
-# Example Usage (updated for TIFF output)
+# --- Example Usage (if __name__ == "__main__") - Unchanged ---
+# (Keep the testing block from the previous version here)
 if __name__ == "__main__":
     print("\n" + "="*30 + "\nTesting data_io module...\n" + "="*30)
     test_dir = "temp_test_data_io"
@@ -261,16 +212,15 @@ if __name__ == "__main__":
     map_h, map_w = 10, 15
     num_pixels_test = map_h * map_w
     num_elements_test = 3
-    num_phases_test = 4 # Use a few phases for colormap test
+    test_phase_labels = [0, 2, 4] # Non-contiguous labels
+    num_phases_test = len(test_phase_labels)
 
     try:
         # --- Create Dummy Input Files ---
-        dummy_gray = np.random.randint(0, 256, size=(map_h, map_w), dtype=np.uint8)
-        Image.fromarray(dummy_gray, mode='L').save(os.path.join(test_dir, "ElementA.bmp"))
-        dummy_txt = np.random.rand(map_h, map_w) * 100
-        np.savetxt(os.path.join(test_dir, "ElementC.txt"), dummy_txt, fmt='%.4f', delimiter=',')
-        dummy_txt_upper = np.random.rand(map_h, map_w) * 50
-        np.savetxt(os.path.join(test_dir, "ElementE_caps.TXT"), dummy_txt_upper, fmt='%.4f', delimiter=',')
+        elem_names_test = ['ElemA', 'ElemC', 'ElemE']
+        Image.fromarray(np.random.randint(0, 256, size=(map_h, map_w), dtype=np.uint8), mode='L').save(os.path.join(test_dir, f"{elem_names_test[0]}.bmp"))
+        np.savetxt(os.path.join(test_dir, f"{elem_names_test[1]}.txt"), np.random.rand(map_h, map_w) * 100, fmt='%.4f', delimiter=',')
+        np.savetxt(os.path.join(test_dir, f"{elem_names_test[2]}.TXT"), np.random.rand(map_h, map_w) * 50, fmt='%.4f', delimiter=',')
         print(f"  Saved dummy input files.")
 
         # --- Test Loading ---
@@ -279,26 +229,26 @@ if __name__ == "__main__":
         print("  Loading successful.")
         assert map_shape_loaded == (map_h, map_w)
         assert pixel_data.shape == (num_pixels_test, num_elements_test)
-        assert len(element_names_loaded) == num_elements_test
+        assert sorted(element_names_loaded) == sorted(elem_names_test)
 
         # --- Test Saving ---
-        print("\n--- Testing Save Function ---")
-        # Create dummy label data (e.g., random labels 0, 1, 2, 3)
-        dummy_labels = np.random.randint(0, num_phases_test, size=num_pixels_test)
-        # Create dummy stats DataFrame
-        phase_names_for_stats = [f"Phase {i}" for i in range(num_phases_test)] # Ensure Phase names match number of labels
+        print("\n--- Testing Save Function (Simplified Plotting) ---")
+        dummy_labels = np.random.choice(test_phase_labels, size=num_pixels_test)
+        for i, label in enumerate(test_phase_labels):
+             if label not in dummy_labels: dummy_labels[i % num_pixels_test] = label
+        print(f"  Unique dummy labels generated: {np.unique(dummy_labels)}")
+
+        phase_names_for_stats = [f"Phase {lbl}" for lbl in np.unique(dummy_labels)]
         dummy_stats_data = {'Phase': phase_names_for_stats,
-                            'Proportion (%)': [100.0 / num_phases_test] * num_phases_test}
-        # Add element stats based on loaded names
+                            'Proportion (%)': [100.0 / num_phases_test] * len(phase_names_for_stats)}
         for name in element_names_loaded:
-            dummy_stats_data[f'Mean_{name}'] = np.random.rand(num_phases_test) * 100
-            dummy_stats_data[f'StdDev_{name}'] = np.random.rand(num_phases_test) * 10
+            dummy_stats_data[f'Mean_{name}'] = np.random.rand(len(phase_names_for_stats)) * 100
+            dummy_stats_data[f'StdDev_{name}'] = np.random.rand(len(phase_names_for_stats)) * 10
         dummy_stats_df = pd.DataFrame(dummy_stats_data)
 
         save_results(test_out_dir, dummy_labels, dummy_stats_df, map_shape_loaded)
 
-        # Verify output files exist (check for TIFF)
-        expected_map_file = os.path.join(test_out_dir, 'phase_map.tiff') # Check for .tiff
+        expected_map_file = os.path.join(test_out_dir, 'phase_map.tiff')
         expected_stats_file = os.path.join(test_out_dir, 'phase_statistics.csv')
         assert os.path.exists(expected_map_file)
         assert os.path.exists(expected_stats_file)
