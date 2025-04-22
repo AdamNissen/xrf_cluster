@@ -6,7 +6,8 @@ import numpy as np
 from PIL import Image # Using Pillow for image loading
 import pandas as pd
 import matplotlib.pyplot as plt
-import colorcet as cc # <-- Import colorcet
+import colorcet as cc 
+from matplotlib.colors import ListedColormap, BoundaryNorm
 
 # Set a non-interactive backend for Matplotlib if running without a display (optional)
 # import matplotlib
@@ -126,16 +127,23 @@ def load_element_maps(input_dir: str) -> tuple[np.ndarray, tuple[int, int], list
 
 
 def save_results(output_dir: str, phase_map_labels: np.ndarray, stats_df: pd.DataFrame, map_shape: tuple[int, int]):
-                                # TODO: Add image_format parameter later for user selection
+                                # TODO: Task 1.6 - Add optional edited_names, edited_colors parameters later
+                                # TODO: Make image_format an argument/option later
     """
     Saves the phase map image (default TIFF) and statistics CSV to the output directory.
+    Uses a discrete Colorcet Glasbey colormap suitable for categorical data,
+    with normalization to handle potentially non-contiguous labels correctly.
 
     Args:
         output_dir: The path to the directory where results will be saved.
         phase_map_labels: 1D NumPy array containing the cluster label for each pixel.
         stats_df: Pandas DataFrame containing the calculated phase statistics.
-                          Expected to have a 'Phase' column for potential labeling.
         map_shape: The original map dimensions (height, width).
+
+    Raises:
+        ValueError: If label array size mismatches map shape, or no unique labels found.
+        OSError: If output directory cannot be created.
+        Exception: Reraises exceptions from plotting or file saving.
     """
     print(f"\nSaving results to: {output_dir}")
     try:
@@ -145,9 +153,9 @@ def save_results(output_dir: str, phase_map_labels: np.ndarray, stats_df: pd.Dat
         raise
 
     # --- Save Phase Map Image ---
-    # Default to TIFF format, filename reflects this
-    output_image_format = 'tiff' # TODO: Make this an argument/option
-    output_map_filename = f'phase_map.{output_image_format}'
+    output_image_format = 'tiff' # Default format
+    output_map_filename = f'phase_map.{output_image_format}' # Base filename
+    # TODO: Task 1.5 - Implement file bumping logic here or wrap this function call
     output_map_path = os.path.join(output_dir, output_map_filename)
     print(f"  Generating phase map image ({output_image_format})...")
 
@@ -158,51 +166,52 @@ def save_results(output_dir: str, phase_map_labels: np.ndarray, stats_df: pd.Dat
         phase_map_reshaped = phase_map_labels.reshape(map_shape)
         unique_labels = np.unique(phase_map_labels)
         num_unique_phases = len(unique_labels)
+        print(f"    Found {num_unique_phases} unique phases for plotting: {unique_labels}")
 
-        # Use colorcet glasbey colormap (handles cycling for many colors)
-        # Using glasbey_dark as an example, others exist (glasbey_light, glasbey_bw, etc.)
-        cmap = cc.cm.glasbey # Consider cc.cm.glasbey_dark or other variants if needed
+        if num_unique_phases == 0:
+             print("    Warning: No unique phases found in labels. Skipping map generation.")
+             # Skip saving stats too? Or save empty stats file? For now, just skip map.
+        else:
+            # --- Create Discrete Colormap and Normalization ---
+            # Select colors from Colorcet Glasbey map
+            num_colors_to_get = min(num_unique_phases, len(cc.cm.glasbey))
+            if num_unique_phases > len(cc.cm.glasbey):
+                 print(f"Warning: Number of unique phases ({num_unique_phases}) exceeds Glasbey colors ({len(cc.cm.glasbey)}). Colors will repeat.")
 
-        fig, ax = plt.subplots(figsize=(8, 8 * map_shape[0] / map_shape[1])) # Adjust aspect ratio
-        # Need to ensure labels map correctly to the colormap indices
-        # Map labels (which might be 0, 1, 3...) to range 0..N-1 for cmap indexing
-        label_to_cmap_idx = {label: i for i, label in enumerate(unique_labels)}
-        cmap_indices = np.vectorize(label_to_cmap_idx.get)(phase_map_reshaped)
+            colors = cc.cm.glasbey[:num_colors_to_get] # Get hex colors or RGB tuples
+            cmap = ListedColormap(colors, name='glasbey_subset')
 
-        im = ax.imshow(cmap_indices, cmap=cmap, interpolation='none', vmin=0, vmax=num_unique_phases-1)
-        ax.set_title('Mineral Phase Map')
-        ax.axis('off')
+            # Create boundaries for normalization: place boundaries halfway between labels
+            sorted_labels = np.sort(unique_labels)
+            # Define boundaries array: add lower boundary below the first label, upper boundary above the last label,
+            # and boundaries halfway between consecutive labels.
+            boundaries = np.concatenate(([sorted_labels[0] - 0.5],
+                                         sorted_labels[:-1] + np.diff(sorted_labels) / 2.0,
+                                         [sorted_labels[-1] + 0.5]))
+            norm = BoundaryNorm(boundaries, cmap.N) # cmap.N is the number of colors in the map
+            # --- End Colormap and Normalization ---
 
-        # Create a colorbar with discrete ticks matching the *original* labels
-        # Map cmap indices back to original labels for ticks
-        ticks_norm = [label_to_cmap_idx[label] for label in unique_labels] # Normalized tick positions (0..N-1)
-        # Center ticks within color blocks
-        tick_locs = np.array(ticks_norm) + 0.5 * (ticks_norm[1] - ticks_norm[0]) if len(ticks_norm) > 1 else [0.5] # Handle single phase case
+            fig, ax = plt.subplots(figsize=(8, 8 * map_shape[0] / map_shape[1]))
+            # Display using the actual label values, normalized correctly by BoundaryNorm
+            im = ax.imshow(phase_map_reshaped, cmap=cmap, norm=norm, interpolation='none')
+            ax.set_title('Mineral Phase Map')
+            ax.axis('off')
 
-        cbar = fig.colorbar(im, ax=ax, label='Phase ID')
-        cbar.set_ticks(ticks_norm) # Set ticks based on the 0..N-1 range used in imshow
-        # Set tick labels to the original phase labels (0, 1, 2, -1 etc.)
-        cbar.set_ticklabels(unique_labels)
+            # --- Configure Colorbar ---
+            # Use the BoundaryNorm and specify ticks at the original label values
+            cbar = fig.colorbar(im, ax=ax, norm=norm, boundaries=boundaries, ticks=sorted_labels,
+                                spacing='uniform', # Uniform spacing looks better with BoundaryNorm
+                                label='Phase ID')
+            # Set tick labels explicitly (optional, usually ticks=sorted_labels is enough)
+            # cbar.ax.set_yticklabels([str(int(l)) for l in sorted_labels]) # Ensure labels are strings if needed
 
+            # Optional: Code block for potentially mapping labels to names (remains commented)
+            # try: ... except ...
 
-        # --- Optional: Code block for potentially mapping labels to names (remains commented) ---
-        # try:
-        #     if 'Phase' in stats_df.columns:
-        #         phase_names = {int(label): name for label, name in zip(unique_labels, stats_df['Phase'])}
-        #         tick_labels = [phase_names.get(int(t), str(int(t))) for t in unique_labels]
-        #         cbar.set_ticklabels(tick_labels) # Set labels corresponding to original values
-        #         print(f"    Labeled colorbar ticks with names: {tick_labels}")
-        #     else:
-        #          print("    'Phase' column not found in stats_df, using numeric tick labels.")
-        # except Exception as tick_label_e:
-        #      print(f"    Warning: Could not map tick labels to phase names: {tick_label_e}")
-        # --- End Optional Tick Labeling ---
-
-
-        # Save as TIFF (or format specified by output_image_format)
-        plt.savefig(output_map_path, dpi=300, bbox_inches='tight', format=output_image_format)
-        plt.close(fig) # Close the figure to free memory
-        print(f"  Phase map saved to: {output_map_path}")
+            # Save the figure
+            plt.savefig(output_map_path, dpi=300, bbox_inches='tight', format=output_image_format)
+            plt.close(fig) # Close the figure to free memory
+            print(f"  Phase map saved to: {output_map_path}")
 
     except Exception as e:
         print(f"  Error generating or saving phase map image: {e}")
@@ -210,15 +219,18 @@ def save_results(output_dir: str, phase_map_labels: np.ndarray, stats_df: pd.Dat
              plt.close(fig)
         raise
 
-
     # --- Save Statistics CSV ---
-    # Filename default approved
-    output_stats_filename = 'phase_statistics.csv'
+    output_stats_filename = 'phase_statistics.csv' # Base filename
+    # TODO: Task 1.5 - Implement file bumping logic here or wrap this function call
     output_stats_path = os.path.join(output_dir, output_stats_filename)
     print(f"  Saving phase statistics...")
     try:
-        stats_df.to_csv(output_stats_path, index=False, float_format='%.4f')
-        print(f"  Statistics saved to: {output_stats_path}")
+        # Only save stats if the DataFrame is not empty (might be empty if map saving was skipped)
+        if not stats_df.empty:
+             stats_df.to_csv(output_stats_path, index=False, float_format='%.4f')
+             print(f"  Statistics saved to: {output_stats_path}")
+        else:
+             print("  Skipping saving statistics: DataFrame is empty.")
     except Exception as e:
          print(f"  Error saving statistics CSV: {e}")
          raise
