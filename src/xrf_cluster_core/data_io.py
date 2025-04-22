@@ -174,7 +174,7 @@ def save_results(output_dir: str, phase_map_labels: np.ndarray, stats_df: pd.Dat
         else:
             # --- Create Discrete Colormap and Normalization ---
             # Select colors from Colorcet Glasbey map
-            num_colors_to_get = min(num_unique_phases, len(cc.cm.glasbey))
+            #num_colors_to_get = min(num_unique_phases, len(cc.cm.glasbey))
             if num_unique_phases > len(cc.cm.glasbey):
                  print(f"Warning: Number of unique phases ({num_unique_phases}) exceeds Glasbey colors ({len(cc.cm.glasbey)}). Colors will repeat.")
 
@@ -188,15 +188,21 @@ def save_results(output_dir: str, phase_map_labels: np.ndarray, stats_df: pd.Dat
             boundaries = np.concatenate(([sorted_labels[0] - 0.5],
                                          sorted_labels[:-1] + np.diff(sorted_labels) / 2.0,
                                          [sorted_labels[-1] + 0.5]))
-            norm = BoundaryNorm(boundaries, cmap.N) # cmap.N is the number of colors in the map
+            #norm = BoundaryNorm(boundaries, cmap.N) # cmap.N is the number of colors in the map
             # --- End Colormap and Normalization ---
 
             fig, ax = plt.subplots(figsize=(8, 8 * map_shape[0] / map_shape[1]))
+
             # Display using the actual label values, normalized correctly by BoundaryNorm
-            im = ax.imshow(phase_map_reshaped, cmap=cmap, norm=norm, interpolation='none')
+            #im = ax.imshow(phase_map_reshaped, cmap=cmap, norm=norm, interpolation='none')
+            im = ax.imshow(phase_map_reshaped, cmap=cmap, interpolation='none')
             ax.set_title('Mineral Phase Map')
             ax.axis('off')
-
+            # --- Use standard Matplotlib Colormap (Temporary Test) ---
+            print("    Using fallback 'tab10' colormap for diagnostics.")
+            cmap = plt.get_cmap('tab10', num_unique_phases) # Use tab10 (max 10 colors) or tab20
+            norm = None # Do not use custom normalization
+            # --- End Temporary Test ---
             # --- Configure Colorbar ---
             # Use the BoundaryNorm and specify ticks at the original label values
             cbar = fig.colorbar(im, ax=ax, ticks=sorted_labels, label='Phase ID')
