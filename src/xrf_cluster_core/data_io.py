@@ -199,9 +199,11 @@ def save_results(output_dir: str, phase_map_labels: np.ndarray, stats_df: pd.Dat
 
             # --- Configure Colorbar ---
             # Use the BoundaryNorm and specify ticks at the original label values
-            cbar = fig.colorbar(im, ax=ax, norm=norm, boundaries=boundaries, ticks=sorted_labels,
-                                spacing='uniform', # Uniform spacing looks better with BoundaryNorm
-                                label='Phase ID')
+            cbar = fig.colorbar(im, ax=ax, ticks=sorted_labels, label='Phase ID')
+            print(f"    Colorbar created with ticks: {sorted_labels}") # Debug print
+#            cbar = fig.colorbar(im, ax=ax, norm=norm, boundaries=boundaries, ticks=sorted_labels,
+ #                               spacing='uniform', # Uniform spacing looks better with BoundaryNorm
+  #                              label='Phase ID')
             # Set tick labels explicitly (optional, usually ticks=sorted_labels is enough)
             # cbar.ax.set_yticklabels([str(int(l)) for l in sorted_labels]) # Ensure labels are strings if needed
 
