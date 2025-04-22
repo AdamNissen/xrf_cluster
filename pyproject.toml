@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mineral-mapper-core" # Name for PyPI / pip install
+version = "0.1.0" # Read from __init__.py or set here
+authors = [{ name="Your Name", email="your@email.com" }]
+description = "Core functions for unsupervised clustering of elemental maps."
+readme = "README.md"
+license = { file="LICENSE" }
+requires-python = ">=3.8"
+classifiers = [ # Standard classifiers
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License", # Adjust license
+    "Operating System :: OS Independent",
+]
+dependencies = [ # List core dependencies here
+    "numpy",
+    "pandas",
+    "scikit-learn",
+    "matplotlib",
+    "Pillow",
+    "colorcet",
+]
+
+[project.urls] # Optional: Links
+"Homepage" = "https://github.com/your_username/mineral_mapper_core"
+"Bug Tracker" = "https://github.com/your_username/mineral_mapper_core/issues"

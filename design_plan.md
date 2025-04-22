@@ -1,107 +1,99 @@
-# Design Plan: Unsupervised Mineral Phase Mapper
+# Design Plan: Mineral Mapper Core Library
 
 **Author** Adam Nissen
-**Version:** 2.0
-**Date:** 2025-04-16
-Made using Google Gemini 2.5
+**Version:** 1.0
+**Date:** 2025-04-21
+**Context:** This plan outlines the development for the public core library component of the Mineral Mapper project, intended for open-source use and as a dependency for other applications.
+**LLM Acknowledgement** This program was developed using the Gemini 2.5 large language model by Google.  
+
 
 ## 1. Project Goal
 
-To develop a Python application with a user-friendly Graphical User Interface (GUI) for performing unsupervised clustering (mineral phase mapping) on elemental map data. The final deliverable should include a standalone executable file for easier distribution and use on machines without a Python development environment.
+To develop and maintain a reusable, installable Python library that provides the core backend functionalities for unsupervised clustering (mineral phase mapping) of elemental map data.
 
-**Key Features:**
-* Accepts elemental maps as `.bmp` or `.txt` files from a user-selected directory.
-* Assumes all maps within an input directory share the same dimensions.
-* Implements K-Means clustering.
-* Provides an option for automatic determination of the number of clusters (k) using the Silhouette Score.
-* Allows manual user override for the number of clusters (k).
-* Includes an optional feature to identify and isolate outlier/mixed pixels into a separate "Null Phase".
-* Outputs a visual phase map image (e.g., PNG).
-* Outputs a statistical summary (CSV) detailing phase proportions and elemental statistics (mean, std dev) per phase.
-* Designed with a modular structure for maintainability and future expansion.
-* **Deployable as a standalone executable.**
+**Core Functionalities:**
+* Loading elemental maps (`.bmp`, `.txt/.TXT` with specified delimiters) and validating dimensions (`core.data_io`).
+* Scaling elemental data for clustering (`core.processing`).
+* Performing K-Means clustering (`core.processing`).
+* Optionally determining optimal 'k' via Silhouette Score (`core.processing`).
+* Optionally identifying outliers for a "null phase" (`core.processing`).
+* Calculating phase statistics (proportion, mean, std dev) using original data (`core.statistics`).
+* Generating statistical summary plots (`core.plotting`).
+* Saving phase map images (TIFF default) and statistics (CSV), including robust color mapping and optional file bumping (`core.data_io`).
 
-## 2. Proposed Repository Structure
-
-mineral_phase_mapper/
-├── data/                   # Directory for test datasets (synthetic, geological)
-│   ├── synthetic_example_1/
-│   │   └── ...
-│   └── geological_example_1/
-│       └── ...
-├── run_mapper.py           # Main application entry point (used for running from source and by PyInstaller)
-├── gui.py                  # Contains the Tkinter GUI class (PhaseMapperApp) and UI logic
-├── core/                   # Package for the core backend logic
+## 2. Repository Structure (`xrf_cluster`)rs.
+xrf_cluster/
+├── src/
+│   └── mineral_mapper_core/  # Installable package source
+│       ├── init.py       # Defines package, exports, holds version
+│       ├── core/             # Core logic sub-package
+│       │   ├── init.py
+│       │   ├── data_io.py      # Loading, Saving (incl. file bumping)
+│       │   ├── processing.py   # Scaling, K-Determination, Clustering
+│       │   ├── statistics.py   # Stats calculation
+│       │   └── plotting.py     # Summary plot generation
+│       └── utils/            # Optional helpers
+│           └── init.py
+├── tests/                    # Unit/integration tests for core functions
 │   ├── init.py
-│   ├── data_io.py
-│   ├── processing.py
-│   └── statistics.py
-├── utils/                  # Optional package for generic helper functions
-│   └── init.py
-├── design_plan.md          # This file
-├── README.md               # Project overview, setup (source), usage (source & executable)
-├── requirements.txt        # List of Python dependencies for running from source
-├── LICENSE                 # Project license file (e.g., MIT, Apache 2.0)
-├── build/                  # PyInstaller working directory (added to .gitignore)
-├── dist/                   # PyInstaller output directory (contains executable) (added to .gitignore)
-├── run_mapper.spec         # Optional: PyInstaller spec file (if customization needed)
-└── .gitignore              # Specifies untracked files (e.g., pycache, venv, build/, dist/)
+│   └── test_*.py
+├── data/                     # Example/test data for library testing
+│   └── ...
+├── pyproject.toml            # Build system definition, metadata, dependencies (PEP 517/518)
+├── README.md                 # Documentation for using this LIBRARY (API, setup)
+├── LICENSE                   # Open-source license (e.g., MIT)
+├── requirements.txt          # Dependencies for DEVELOPMENT of this library
+└── .gitignore                # Standard Python ignores
 
-*Note: `build/` and `dist/` directories are generated by PyInstaller and should be added to `.gitignore`.*
+* **Key Files:**
+    * `pyproject.toml`: Defines how to build and install this library, its dependencies, and metadata. Crucial for `pip install`.
+    * `src/mineral_mapper_core/`: Contains the actual Python code organized as a package.
+    * `tests/`: Contains automated tests to ensure core logic works correctly.
+    * `README.md`: Explains what the library does, how to install it (`pip install .` or `pip install git+...`), and how to use its functions (API documentation).
+    * `LICENSE`: Specifies the open-source terms of use.
 
-## 3. Development Workflow
+## 3. Development Workflow 
 
-### Phase 1: Project Setup & Core Data Handling
+### Phase 1: Setup & Core Data Handling
 
-* **Goal:** Establish the project structure and implement reliable loading/saving of data and results, tested against provided datasets.
+* **Goal:** Establish installable package structure, implement reliable I/O, handle file bumping, fix plotting.
 * **Tasks:**
-    1.  **Setup Directory Structure:** Create folders and initial files. Initialize Git repo. Create `.gitignore` (include `__pycache__/`, `venv/`, `build/`, `dist/`, `*.spec` initially). Create `requirements.txt`.
-    2.  **Implement `data_io.load_element_maps`:** Handle `.bmp`/`.txt`, validate dimensions, manage errors.
-    3.  **Implement `data_io.save_results`:** Save map image (`matplotlib`) and statistics CSV (`pandas`).
-    4.  **Testing (Phase 1):** Test I/O functions using **provided datasets** via standalone scripts or `if __name__ == "__main__":` blocks.
+    * 1.1: **Setup Package Structure:** Create `src/` layout, `pyproject.toml`, `tests/`, `LICENSE`, dev `requirements.txt`, `.gitignore`.
+    * 1.2: **Implement `core.data_io.load_element_maps`:** Loading, validation, error handling (Done - requires moving to `src/`).
+    * 1.3: **Implement `core.data_io.save_results`:** Initial save logic (Done - requires moving to `src/`).
+    * 1.4: **Refine `save_results` Plotting:** Fix colorbar (e.g., using `ListedColormap` + Colorcet). Ensure TIFF default. *(Next Step)*
+    * 1.5: **Refine `save_results` File Bumping:** Implement logic to avoid overwriting output files by appending `(n)`.
+    * 1.6: **Refine `save_results` Signature:** Allow passing optional phase names/color maps for incorporation into outputs.
+    * 1.7: **Testing:** Add unit tests for `data_io` functions in `tests/`.
 
-### Phase 2: Core Processing & Statistics Logic
+### Phase 2: Core Processing, Stats & Plotting
 
-* **Goal:** Implement the core machine learning and statistical calculations, ensuring they function correctly independent of the GUI.
+* **Goal:** Implement core ML, stats calculations, and summary plotting functions.
 * **Tasks:**
-    1.  **Implement Data Scaling (`processing.py`):** `StandardScaler`.
-    2.  **Implement Automatic k Determination (`processing.py`):** Silhouette Score method.
-    3.  **Implement Clustering (`processing.py`):** `KMeans`, including optional null phase logic.
-    4.  **Implement Statistics Calculation (`statistics.py`):** Calculate phase proportions, means, std devs using unscaled data; format into DataFrame.
-    5.  **Testing (Phase 2):** Test processing pipeline components using **provided datasets** via standalone scripts. Verify intermediate and final calculation outputs.
+    * 2.1: **Implement `core.processing.scale_data`:** StandardScaler implementation (Done - requires moving to `src/`).
+    * 2.2: **Implement `core.processing.determine_optimal_k`:** Silhouette score method (Done - requires moving to `src/`). Note limitations.
+    * 2.3: **Implement `core.processing.perform_clustering`:** K-Means + optional null phase (Done - requires moving to `src/`).
+    * 2.4: **Implement `core.statistics.calculate_phase_stats`:** Calculate proportions, means, std devs (Done - requires moving to `src/`).
+    * 2.5: **Implement `core.plotting.plot_statistics_comparison`:** Create functions to generate and save summary plots from `stats_df`.
+    * 2.6: **Testing:** Add unit/integration tests for `processing`, `statistics`, `plotting` functions in `tests/`.
 
-### Phase 3: GUI Implementation & Integration
+### Phase 3: Testing, Refinement & Documentation
 
-* **Goal:** Build the user interface and connect it seamlessly to the backend core logic.
+* **Goal:** Ensure library robustness, refactor, document API.
 * **Tasks:**
-    1.  **Setup Basic GUI Layout (`gui.py`):** `PhaseMapperApp` class, widgets for inputs, options, status.
-    2.  **Implement GUI Actions:** File/directory Browse, K selection logic.
-    3.  **Implement `run_analysis` Method (`gui.py`):** Coordinate inputs, validation, backend calls, error handling, status updates.
-    4.  **Implement Entry Point (`run_mapper.py`):** Instantiate and run the `PhaseMapperApp` GUI.
-    5.  **Integration Testing (Phase 3):** Run the application from source (`python run_mapper.py`). Test all GUI workflows using **provided datasets**. Verify UI options correctly influence backend processing.
+    * 3.1: **Integration Testing:** Test the full workflow using functions within the library context. Evaluate results on test data (`data/`).
+    * 3.2: **Code Review & Refactoring:** Improve clarity, efficiency, comments within the `src/` code. Ensure a stable API.
+    * 3.3: **Documentation:** Write/update `README.md` focusing on library installation and API usage (function arguments, return values, examples).
 
-### Phase 4: Refinement, Documentation, Testing & Packaging
+### Phase 4: Versioning & Maintenance
 
-* **Goal:** Polish the application, perform final testing on source code, document, create the executable, and test the executable.
+* **Goal:** Manage library versions and provide ongoing maintenance.
 * **Tasks:**
-    1.  **Code Review & Refactoring:** Review all modules for clarity, efficiency, comments, best practices.
-    2.  **Final Source Code Testing:** Run the full application from source (`python run_mapper.py`) on **all provided synthetic and geological datasets**. Verify outputs thoroughly.
-    3.  **Documentation:** Create/update `README.md` (setup, usage for both source and executable), choose and add `LICENSE` file.
-    4.  **(Optional) Unit Testing:** Implement formal unit tests for key functions in `core`.
-    5.  **Packaging with PyInstaller:**
-        * Install/Confirm PyInstaller (`pip install pyinstaller`).
-        * Run PyInstaller targeting `run_mapper.py` (e.g., `pyinstaller --windowed --onefile run_mapper.py` or a more complex command, possibly using a `.spec` file if needed for hidden imports or data files associated with libraries like Matplotlib/SciPy).
-        * Troubleshoot any packaging errors (common with scientific libraries - may require specific hooks or adjustments in a `.spec` file).
-    6.  **Packaged Executable Testing:**
-        * **Crucially:** Test the generated executable (from the `dist` folder) on a target machine (ideally one *without* a Python development environment installed) using the **provided test datasets**.
-        * Verify the executable launches correctly, all GUI functions work, processing completes, and output files are generated as expected.
+    * 4.1: **Versioning:** Update version number (e.g., in `pyproject.toml` or `src/mineral_mapper_core/__init__.py`) according to changes (SemVer recommended). Use Git tags for releases.
+    * 4.2: **Maintenance:** Address bugs reported in issues, consider feature requests for the core library.
 
-## 4. Collaboration Plan (If Applicable)
+## 4. Collaboration Plan
 
-* **Version Control:** Utilize Git/GitHub/GitLab.
-* **Branching Strategy:** Feature branches, code reviews before merging.
-* **Communication:** Regular sync-ups, issue tracking.
-* **Task Management:** Use workflow phases/tasks, potentially via project boards.
-
----
-This updated plan integrates the executable creation as a final deployment step, including necessary testing to ensure the packaged application works correctly for end-users.
+* Use Git feature branches -> Pull Requests -> `dev` branch.
+* Use GitHub Issues for tracking bugs and features for the core library.
+* Ensure automated tests pass before merging.
