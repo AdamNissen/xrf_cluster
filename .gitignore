@@ -7,7 +7,6 @@ __pycache__/
 venv/
 .venv/
 
-
 # Distribution / Packaging
 build/
 dist/
@@ -36,6 +35,9 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+
+#Output directory for testing
+.data/output/
 
 # Secrets / Config (if any are added later)
 # *.ini
