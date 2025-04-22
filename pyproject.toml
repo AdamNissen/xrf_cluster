@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mineral-mapper-core" # Name for PyPI / pip install
-version = "0.1.0" # Read from __init__.py or set here
-authors = [{ name="Your Name", email="your@email.com" }]
+name = "xrf-cluster-core" # Name for PyPI / pip install
+version = "2.0.0" # Read from __init__.py or set here
+authors = [{ name="Adam Nissen", email="adamjnisse@gmail.com" }]
 description = "Core functions for unsupervised clustering of elemental maps."
 readme = "README.md"
 license = { file="LICENSE" }
@@ -25,5 +25,5 @@ dependencies = [ # List core dependencies here
 ]
 
 [project.urls] # Optional: Links
-"Homepage" = "https://github.com/your_username/mineral_mapper_core"
-"Bug Tracker" = "https://github.com/your_username/mineral_mapper_core/issues"
+"Homepage" = "https://github.com/AdamNissen/xrf_cluster"
+"Bug Tracker" = "https://github.com/AdamNissen/xrf_cluster/issues"
