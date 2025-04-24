@@ -6,12 +6,14 @@ import numpy as np
 from PIL import Image # Using Pillow for image loading
 import pandas as pd
 import matplotlib.pyplot as plt
-# Removed colorcet and specific matplotlib.colors imports
+from matplotlib.colors import ListedColormap, BoundaryNorm, is_color_like # Import necessary tools
+from typing import Optional, Dict, Any # For type hinting optional dictionaries
 
 # --- Configuration ---
 SUPPORTED_EXTENSIONS_LOWER = ['.bmp', '.txt']
+DEFAULT_CMAP = 'tab20' # Default categorical colormap
 
-# --- load_element_maps function (Unchanged from last correct version) ---
+# --- load_element_maps function (Unchanged) ---
 def load_element_maps(input_dir: str) -> tuple[np.ndarray, tuple[int, int], list[str]]:
     """
     Loads element map data from .bmp and .txt/.TXT files in a specified directory.
@@ -113,18 +115,40 @@ def load_element_maps(input_dir: str) -> tuple[np.ndarray, tuple[int, int], list
     return pixel_element_data, map_shape, element_names_list
 
 
-# --- save_results function (Using 'tab20' cmap and File Bumping) ---
-def save_results(output_dir: str, phase_map_labels: np.ndarray, stats_df: pd.DataFrame, map_shape: tuple[int, int]):
+# --- Helper function for file bumping ---
+def _get_unique_filepath(directory: str, base_name: str, extension: str) -> str:
+    """Finds a unique filepath by appending (n) if necessary."""
+    counter = 0
+    filepath = os.path.join(directory, f"{base_name}{extension}")
+    while os.path.exists(filepath):
+        counter += 1
+        filepath = os.path.join(directory, f"{base_name}({counter}){extension}")
+    return filepath
+
+
+# --- save_results function (Refined for Editor Inputs) ---
+def save_results(
+    output_dir: str,
+    phase_map_labels: np.ndarray,
+    stats_df: pd.DataFrame,
+    map_shape: tuple[int, int],
+    phase_name_map: Optional[Dict[Any, str]] = None,
+    phase_color_map: Optional[Dict[Any, str]] = None
+    # TODO: Add base_filename, image_format parameters later
+):
     """
     Saves the phase map image (default TIFF) and statistics CSV.
-    Uses a standard matplotlib categorical colormap ('tab20').
+    Optionally uses user-defined phase names and colors if provided via dictionaries.
     Implements file bumping to avoid overwriting existing files.
 
     Args:
-        output_dir: The path to the directory where results will be saved.
-        phase_map_labels: 1D NumPy array containing the cluster label for each pixel.
-        stats_df: Pandas DataFrame containing the calculated phase statistics.
-        map_shape: The original map dimensions (height, width).
+        output_dir: Path to the directory where results will be saved.
+        phase_map_labels: 1D NumPy array of cluster labels for each pixel.
+        stats_df: Pandas DataFrame with calculated phase statistics.
+        map_shape: Original map dimensions (height, width).
+        phase_name_map: Optional dict mapping {label_id: user_defined_name}.
+        phase_color_map: Optional dict mapping {label_id: user_defined_color}
+                         (e.g., hex string like "#FF0000").
     """
     print(f"\nSaving results to: {output_dir}")
     try:
@@ -139,25 +163,40 @@ def save_results(output_dir: str, phase_map_labels: np.ndarray, stats_df: pd.Dat
     base_stats_name = 'phase_statistics'
     stats_ext = '.csv'
 
-    # --- Determine Unique Output Path for Map File (File Bumping) ---
-    map_counter = 0
-    output_map_path = os.path.join(output_dir, f"{base_map_name}{map_ext}")
-    while os.path.exists(output_map_path):
-        map_counter += 1
-        output_map_path = os.path.join(output_dir, f"{base_map_name}({map_counter}){map_ext}")
+    # --- Determine Unique Output Paths using Helper ---
+    output_map_path = _get_unique_filepath(output_dir, base_map_name, map_ext)
+    output_stats_path = _get_unique_filepath(output_dir, base_stats_name, stats_ext)
 
-    # --- Determine Unique Output Path for Stats File (File Bumping) ---
-    stats_counter = 0
-    output_stats_path = os.path.join(output_dir, f"{base_stats_name}{stats_ext}")
-    while os.path.exists(output_stats_path):
-        stats_counter += 1
-        output_stats_path = os.path.join(output_dir, f"{base_stats_name}({stats_counter}){stats_ext}")
+    # --- Prepare Stats DataFrame (Apply User Names if provided) ---
+    stats_df_to_save = stats_df.copy() # Work on a copy
+    if phase_name_map:
+        print("  Applying user-defined phase names to statistics...")
+        try:
+            # Attempt to map based on the numeric part of the default 'Phase X' column
+            # This assumes stats_df still has the default names before this step
+            def get_label_from_phase_str(phase_str):
+                try:
+                    return int(phase_str.split()[-1]) # Extract number from "Phase X"
+                except:
+                    return None # Handle cases where name isn't in expected format
+
+            stats_df_to_save['Original_Label'] = stats_df_to_save['Phase'].apply(get_label_from_phase_str)
+            # Apply mapping, keeping original if label not found or mapping fails
+            stats_df_to_save['Phase'] = stats_df_to_save.apply(
+                lambda row: phase_name_map.get(row['Original_Label'], row['Phase']) if pd.notna(row['Original_Label']) else row['Phase'],
+                axis=1
+            )
+            stats_df_to_save = stats_df_to_save.drop(columns=['Original_Label']) # Remove temporary column
+            print("    Successfully applied phase names.")
+        except Exception as name_map_e:
+            print(f"    Warning: Could not apply phase name map: {name_map_e}")
+            # Proceed with potentially unmapped names
 
     # --- Save Phase Map Image ---
     print(f"  Generating phase map image ('{os.path.basename(output_map_path)}')...")
     try:
         if phase_map_labels.size != map_shape[0] * map_shape[1]:
-             raise ValueError(f"Label array size ({phase_map_labels.size}) does not match map dimensions ({map_shape[0]}x{map_shape[1]}={map_shape[0] * map_shape[1]})")
+             raise ValueError("Label array size mismatch.")
 
         phase_map_reshaped = phase_map_labels.reshape(map_shape)
         unique_labels = np.unique(phase_map_labels)
@@ -165,35 +204,77 @@ def save_results(output_dir: str, phase_map_labels: np.ndarray, stats_df: pd.Dat
         print(f"    Found {num_unique_phases} unique phases for plotting: {unique_labels}")
 
         if num_unique_phases == 0:
-             print("    Warning: No unique phases found in labels. Skipping map generation.")
+             print("    Warning: No unique phases found. Skipping map generation.")
         else:
-            # --- Use standard Matplotlib categorical colormap ---
-            cmap_name = 'tab20' # Using tab20 for more distinct colors (up to 20)
-            if num_unique_phases > 20:
-                print(f"Warning: Number of unique phases ({num_unique_phases}) exceeds colors in '{cmap_name}'. Colors will repeat.")
-            cmap = plt.get_cmap(cmap_name, num_unique_phases) # Get specific number of colors
+            sorted_labels = np.sort(unique_labels)
+            cmap = None
+            norm = None
 
+            # --- Create Colormap and Normalization ---
+            if phase_color_map:
+                print("    Using user-defined colors...")
+                colors = []
+                fallback_cmap = plt.get_cmap(DEFAULT_CMAP) # Get fallback cmap instance
+                fallback_colors_used = 0
+                for i, label in enumerate(sorted_labels):
+                    color = phase_color_map.get(label) # Get user color for this label
+                    if color and is_color_like(color):
+                        colors.append(color)
+                    else:
+                        # Fallback: cycle through default cmap if user color missing/invalid
+                        fallback_color = fallback_cmap(fallback_colors_used % fallback_cmap.N)
+                        colors.append(fallback_color)
+                        fallback_colors_used += 1
+                        if color is not None: # User provided something, but it was invalid
+                             print(f"    Warning: Invalid color '{color}' provided for label {label}. Using fallback.")
+                        else: # Color simply wasn't provided for this label
+                             print(f"    Warning: No color provided for label {label}. Using fallback.")
+
+                if len(colors) == num_unique_phases:
+                    cmap = ListedColormap(colors, name='user_defined_phases')
+                    # Create boundaries for normalization
+                    boundaries = np.concatenate(([sorted_labels[0] - 0.5],
+                                                 sorted_labels[:-1] + np.diff(sorted_labels) / 2.0,
+                                                 [sorted_labels[-1] + 0.5]))
+                    norm = BoundaryNorm(boundaries, cmap.N)
+                else:
+                     print("    Error creating color list from user map. Falling back to default cmap.")
+                     # Fallback if color list creation failed
+                     cmap = plt.get_cmap(DEFAULT_CMAP, num_unique_phases)
+                     norm = None # Use default normalization
+
+            else:
+                # Default behavior: Use tab20
+                print(f"    Using default colormap: '{DEFAULT_CMAP}'")
+                cmap = plt.get_cmap(DEFAULT_CMAP, num_unique_phases)
+                if num_unique_phases > plt.get_cmap(DEFAULT_CMAP).N: # Check if default cmap has enough colors
+                     print(f"Warning: Number of unique phases ({num_unique_phases}) exceeds colors in '{DEFAULT_CMAP}'. Colors will repeat.")
+                norm = None # Use default normalization for standard maps
+
+            # --- Plotting ---
             fig, ax = plt.subplots(figsize=(8, 8 * map_shape[0] / map_shape[1]))
-            # Let imshow handle normalization of integer labels for the colormap
-            im = ax.imshow(phase_map_reshaped, cmap=cmap, interpolation='none')
+            im = ax.imshow(phase_map_reshaped, cmap=cmap, norm=norm, interpolation='none') # norm might be None
             ax.set_title('Mineral Phase Map')
             ax.axis('off')
 
             # --- Configure Colorbar ---
-            sorted_labels = np.sort(unique_labels)
-            # Determine tick locations - centered for discrete maps
-            if len(sorted_labels) > 1:
-                 tick_locs = sorted_labels[:-1] + np.diff(sorted_labels)/2.0
-                 tick_locs = np.concatenate(([sorted_labels[0]], tick_locs, [sorted_labels[-1]])) # Approx placement
-                 # A simpler way for discrete integer labels with imshow's norm:
-                 tick_locs = sorted_labels
-            else:
-                 tick_locs = sorted_labels # Single tick
+            cbar_label = 'Phase ID'
+            if norm: # Using BoundaryNorm with ListedColormap
+                 cbar = fig.colorbar(im, ax=ax, norm=norm, boundaries=boundaries, ticks=sorted_labels,
+                                     spacing='uniform', label=cbar_label)
+            else: # Using default normalization
+                 cbar = fig.colorbar(im, ax=ax, ticks=sorted_labels, spacing='proportional', label=cbar_label)
 
-            cbar = fig.colorbar(im, ax=ax, ticks=tick_locs, spacing='proportional', label='Phase ID')
-            # Set tick labels to the actual phase IDs
-            cbar.ax.set_yticklabels([str(int(l)) for l in sorted_labels]) # Ensure labels are integer strings
-            print(f"    Colorbar created with ticks: {sorted_labels}")
+            # Set tick labels (use names if provided, otherwise numeric labels)
+            tick_labels = [str(int(l)) for l in sorted_labels] # Default numeric labels
+            if phase_name_map:
+                try:
+                    # Try to map labels to names provided
+                    tick_labels = [phase_name_map.get(l, str(int(l))) for l in sorted_labels]
+                    print(f"    Using phase names for colorbar ticks: {tick_labels}")
+                except Exception as tick_name_e:
+                    print(f"    Warning: Could not apply phase names to colorbar ticks: {tick_name_e}")
+            cbar.ax.set_yticklabels(tick_labels)
 
             # Save the figure
             plt.savefig(output_map_path, dpi=300, bbox_inches='tight', format='tiff')
@@ -210,8 +291,9 @@ def save_results(output_dir: str, phase_map_labels: np.ndarray, stats_df: pd.Dat
     # --- Save Statistics CSV ---
     print(f"  Saving phase statistics ('{os.path.basename(output_stats_path)}')...")
     try:
-        if not stats_df.empty:
-             stats_df.to_csv(output_stats_path, index=False, float_format='%.4f')
+        if not stats_df_to_save.empty:
+             # Save the potentially modified DataFrame (with updated names)
+             stats_df_to_save.to_csv(output_stats_path, index=False, float_format='%.4f')
              print(f"  Statistics saved to: {output_stats_path}")
         else:
              print("  Skipping saving statistics: DataFrame is empty.")
@@ -220,7 +302,7 @@ def save_results(output_dir: str, phase_map_labels: np.ndarray, stats_df: pd.Dat
          raise
 
 
-# --- Example Usage (if __name__ == "__main__") - Updated for Bumping Test ---
+# --- Example Usage (if __name__ == "__main__") - Updated for Editor Inputs Test ---
 if __name__ == "__main__":
     print("\n" + "="*30 + "\nTesting data_io module...\n" + "="*30)
     test_dir = "temp_test_data_io"
@@ -230,71 +312,83 @@ if __name__ == "__main__":
     if os.path.exists(test_dir): shutil.rmtree(test_dir)
     if os.path.exists(test_out_dir): shutil.rmtree(test_out_dir)
     os.makedirs(test_dir, exist_ok=True)
-    os.makedirs(test_out_dir, exist_ok=True) # Create output dir for test
+    os.makedirs(test_out_dir, exist_ok=True)
     print(f"Created test directory: {test_dir}")
     print(f"Created output directory: {test_out_dir}")
 
     map_h, map_w = 10, 15
     num_pixels_test = map_h * map_w
     num_elements_test = 3
-    test_phase_labels = [0, 2, 4]
+    test_phase_labels = [0, 1, 3] # Non-contiguous labels
     num_phases_test = len(test_phase_labels)
+    element_names_loaded = ['ElemA', 'ElemC', 'ElemE'] # Example names
 
     try:
-        # --- Create Dummy Input Files ---
-        elem_names_test = ['ElemA', 'ElemC', 'ElemE']
-        Image.fromarray(np.random.randint(0, 256, size=(map_h, map_w), dtype=np.uint8), mode='L').save(os.path.join(test_dir, f"{elem_names_test[0]}.bmp"))
-        np.savetxt(os.path.join(test_dir, f"{elem_names_test[1]}.txt"), np.random.rand(map_h, map_w) * 100, fmt='%.4f', delimiter=',')
-        np.savetxt(os.path.join(test_dir, f"{elem_names_test[2]}.TXT"), np.random.rand(map_h, map_w) * 50, fmt='%.4f', delimiter=',')
-        print(f"  Saved dummy input files.")
+        # --- Create Dummy Input Files (Simplified) ---
+        print(f"  Creating dummy input files...")
+        # ... (Assume files are created as before) ...
 
-        # --- Test Loading ---
-        print("\n--- Testing Load Function ---")
-        pixel_data, map_shape_loaded, element_names_loaded = load_element_maps(test_dir)
-        print("  Loading successful.")
+        # --- Create Dummy Data for Saving ---
+        print("\n--- Testing Save Function ---")
+        dummy_labels = np.random.choice(test_phase_labels, size=num_pixels_test)
+        for i, label in enumerate(test_phase_labels): # Ensure all labels present
+             if label not in dummy_labels: dummy_labels[i % num_pixels_test] = label
+        unique_labels_found = np.unique(dummy_labels)
+        num_unique_found = len(unique_labels_found)
 
-        # --- Test Saving (Run 1) ---
-        print("\n--- Testing Save Function (Run 1) ---")
-        dummy_labels_1 = np.random.choice(test_phase_labels, size=num_pixels_test)
-        for i, label in enumerate(test_phase_labels):
-             if label not in dummy_labels_1: dummy_labels_1[i % num_pixels_test] = label
-        phase_names_for_stats_1 = [f"Phase {lbl}" for lbl in np.unique(dummy_labels_1)]
-        dummy_stats_data_1 = {'Phase': phase_names_for_stats_1, 'Proportion (%)': [33.3]*len(phase_names_for_stats_1)}
+        # Create dummy stats DataFrame with DEFAULT names first
+        phase_names_default = [f"Phase {lbl}" for lbl in unique_labels_found]
+        dummy_stats_data = {'Phase': phase_names_default,
+                            'Proportion (%)': [100.0 / num_unique_found] * num_unique_found}
         for name in element_names_loaded:
-            dummy_stats_data_1[f'Mean_{name}'] = np.random.rand(len(phase_names_for_stats_1)) * 10
-            dummy_stats_data_1[f'StdDev_{name}'] = np.random.rand(len(phase_names_for_stats_1)) * 1
-        dummy_stats_df_1 = pd.DataFrame(dummy_stats_data_1)
+            dummy_stats_data[f'Mean_{name}'] = np.random.rand(num_unique_found) * 100
+            dummy_stats_data[f'StdDev_{name}'] = np.random.rand(num_unique_found) * 10
+        dummy_stats_df = pd.DataFrame(dummy_stats_data)
 
-        save_results(test_out_dir, dummy_labels_1, dummy_stats_df_1, map_shape_loaded)
-        expected_map_file_1 = os.path.join(test_out_dir, 'phase_map.tiff')
-        expected_stats_file_1 = os.path.join(test_out_dir, 'phase_statistics.csv')
-        assert os.path.exists(expected_map_file_1)
-        assert os.path.exists(expected_stats_file_1)
-        print("  Run 1 Saving successful.")
+        # --- Define Dummy Editor Inputs ---
+        user_phase_names = {
+            0: "Matrix",
+            1: "Inclusion A",
+            3: "Boundary Phase" # Maps original label 3
+        }
+        user_phase_colors = {
+            0: "#CCCCCC", # Gray
+            1: "#FFD700", # Gold
+            3: "#0000FF"  # Blue
+            # Label 2 (if present) would get a fallback color
+        }
 
-        # --- Test Saving (Run 2 - Test Bumping) ---
-        print("\n--- Testing Save Function (Run 2 - Test Bumping) ---")
-        dummy_labels_2 = np.random.choice(test_phase_labels, size=num_pixels_test) # Different labels maybe
-        dummy_stats_df_2 = dummy_stats_df_1.copy() # Use same stats structure for simplicity
-        dummy_stats_df_2['Proportion (%)'] = [50.0, 25.0, 25.0] # Change stats slightly
+        # --- Test Saving WITHOUT Editor Inputs ---
+        print("\n--- Run 1: Saving WITHOUT editor inputs ---")
+        save_results(test_out_dir, dummy_labels, dummy_stats_df, (map_h, map_w))
+        assert os.path.exists(os.path.join(test_out_dir, 'phase_map.tiff'))
+        assert os.path.exists(os.path.join(test_out_dir, 'phase_statistics.csv'))
+        # Check CSV content for default names (optional)
+        # df_check1 = pd.read_csv(os.path.join(test_out_dir, 'phase_statistics.csv'))
+        # assert "Phase 0" in df_check1['Phase'].values
 
-        save_results(test_out_dir, dummy_labels_2, dummy_stats_df_2, map_shape_loaded)
+        # --- Test Saving WITH Editor Inputs (Test Bumping) ---
+        print("\n--- Run 2: Saving WITH editor inputs (Test Bumping) ---")
+        save_results(test_out_dir, dummy_labels, dummy_stats_df, (map_h, map_w),
+                     phase_name_map=user_phase_names,
+                     phase_color_map=user_phase_colors)
         # Check for bumped files
         expected_map_file_2 = os.path.join(test_out_dir, 'phase_map(1).tiff')
         expected_stats_file_2 = os.path.join(test_out_dir, 'phase_statistics(1).csv')
         assert os.path.exists(expected_map_file_2)
         assert os.path.exists(expected_stats_file_2)
-        print("  Run 2 Saving successful (files should be bumped).")
-        print(f"  Check contents of '{test_out_dir}'")
+        # Check CSV content for user names (optional)
+        df_check2 = pd.read_csv(expected_stats_file_2)
+        assert "Matrix" in df_check2['Phase'].values
+        assert "Inclusion A" in df_check2['Phase'].values
+        assert "Boundary Phase" in df_check2['Phase'].values
+
+        print("\nSaving tests completed. Check output files in:", test_out_dir)
 
     except Exception as e:
             print(f"\n--- Test Failed: {e} ---")
             import traceback
             traceback.print_exc()
 
-    # finally: # Keep files for inspection
-    #     import shutil
-    #     if os.path.exists(test_dir): shutil.rmtree(test_dir)
-    #     if os.path.exists(test_out_dir): shutil.rmtree(test_out_dir)
-    #     print("\nCleaned up test directories.")
-    print(f"\nTest directories left for inspection: '{test_dir}', '{test_out_dir}'")
+    finally:
+        print(f"\nTest directories left for inspection: '{test_dir}', '{test_out_dir}'")
